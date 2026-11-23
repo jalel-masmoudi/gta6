@@ -1,79 +1,158 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+// Coral Bay: Underworld - Deterministic Screenshot Scenes & Autopilot Staging
+import { MISSIONS } from './config.js';
 
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
+export function stageShot(name, state) {
+  const { player, city, fleet, combat, pedestrians, police, missions, camera } = state;
 
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
-    }
-  }
-  return Infinity;
-}
+  if (name === '1-city-cruise' || name === 'start' || name === '1') {
+    // Shot 1: High-speed cruise in Venom GT on Ocean Promenade
+    player.x = 600;
+    player.y = 1400;
+    player.angle = Math.PI / 2; // Facing South
+    player.cash = 32500;
+    player.health = 100;
+    player.armor = 100;
 
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
-  }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
-    }
-  }
-  return best;
-}
+    // Spawn Venom GT and place player in it
+    const car = fleet.spawn('venom', 600, 1400, Math.PI / 2, false);
+    car.speed = 15.5;
+    car.nitro = 75;
+    player.enterCar(car);
 
-/**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
- */
-export function stageShot(name, world) {
-  world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
+    // Camera follow
+    camera.x = 600;
+    camera.y = 1400;
+    camera.zoom = 0.92;
+
+    // Ambient traffic on other lane (Northbound)
+    const traffic1 = fleet.spawn('stallion', 640, 1650, -Math.PI / 2, false);
+    traffic1.speed = 8.0;
+    const traffic2 = fleet.spawn('vindicator', 560, 1150, Math.PI / 2, false);
+    traffic2.speed = 12.0;
+
+    // Pedestrians on sidewalks
+    pedestrians.pedestrians.push(
+      { id: 'p1', x: 505, y: 1350, angle: Math.PI / 2, spec: { shirt: '#ff6b6b', skin: '#f8d7da', speed: 2 }, animStep: 2 },
+      { id: 'p2', x: 505, y: 1420, angle: Math.PI / 2, spec: { shirt: '#48dbfb', skin: '#ffeaa7', speed: 2 }, animStep: 5 },
+      { id: 'p3', x: 690, y: 1380, angle: -Math.PI / 2, spec: { shirt: '#f368e0', skin: '#fab1a0', speed: 2 }, animStep: 1 }
+    );
+
+    // Particles: tire drift smoke & nitro
+    combat.spawnParticle('skid', 600, 1370, 4);
+    combat.spawnParticle('nitro', 600, 1350, 6);
+
+    // Mission setup
+    missions.startMission(1); // High-Octane Repo
+    missions.setDialogue('Rico Cruz', 'Floor it Jax, the highway is clear ahead! Deliver the Venom to the Marina!', 10);
+  } else if (name === '2-foot-combat' || name === 'play' || name === '2') {
+    // Shot 2: Tactical on-foot shootout in Neon Palms
+    player.x = 2800;
+    player.y = 750;
+    player.angle = -0.3;
+    player.cash = 45200;
+    player.health = 85;
+    player.armor = 65;
+    player.selectedWeaponIndex = 3; // Titan Assault Rifle
+    player.isAttacking = true;
+    player.attackTimer = 0.15;
+
+    camera.x = 2800;
+    camera.y = 750;
+    camera.zoom = 1.05;
+
+    // Spawn armed enemies
+    combat.spawnEnemy(2980, 710, 'rifle');
+    combat.spawnEnemy(2950, 820, 'smg');
+    combat.spawnEnemy(3040, 770, 'pistol');
+
+    // Bullets & tracers in flight
+    combat.spawnBullet({ x: 2835, y: 740, angle: -0.3, speed: 38, damage: 48, range: 400, owner: 'player', color: '#ff453a' });
+    combat.spawnBullet({ x: 2950, y: 720, angle: Math.PI - 0.25, speed: 26, damage: 18, range: 350, owner: 'enemy', color: '#ffd60a' });
+
+    // Sparks & blood particles
+    combat.spawnParticle('spark', 2920, 725, 8);
+    combat.spawnParticle('blood', 2980, 710, 6);
+
+    // Parked getaway car nearby
+    fleet.spawn('vindicator', 2730, 790, 0, false);
+
+    // Mission setup
+    missions.startMission(2); // Warehouse Strike
+    missions.setDialogue('Selena Vance', 'Keep your head down Jax! Take out those syndicate enforcers!', 10);
+  } else if (name === '3-police-chase' || name === 'end' || name === '3') {
+    // Shot 3: Intense 3-Star Police Pursuit
+    player.x = 2200;
+    player.y = 2200;
+    player.angle = Math.PI / 2;
+    player.cash = 68400;
+    player.health = 90;
+    player.armor = 80;
+
+    // Player Muscle Car drifting
+    const muscle = fleet.spawn('vindicator', 2200, 2200, Math.PI / 2 + 0.18, false);
+    muscle.speed = 13.8;
+    muscle.isDrifting = true;
+    player.enterCar(muscle);
+
+    camera.x = 2200;
+    camera.y = 2200;
+    camera.zoom = 0.90;
+
+    // Police Cruisers flanking with sirens
+    const cop1 = fleet.spawn('interceptor', 2160, 2040, Math.PI / 2 + 0.05, true);
+    cop1.speed = 14.5;
+    cop1.sirenOn = true;
+
+    const cop2 = fleet.spawn('interceptor', 2245, 1980, Math.PI / 2 - 0.08, true);
+    cop2.speed = 15.0;
+    cop2.sirenOn = true;
+
+    // Wanted Level 3 Stars
+    police.setWantedLevel(3);
+
+    // Particles: Skid marks & tire smoke
+    combat.spawnParticle('skid', 2200, 2160, 6);
+    combat.spawnParticle('smoke', 2200, 2150, 4);
+
+    missions.setDialogue('CBPD Dispatch', 'All units on Central Way, suspect is in a black muscle car! Box him in!', 10);
+  } else if (name === '4-mission-heist' || name === '4') {
+    // Shot 4: The Grand Marina Heist Escapade
+    player.x = 3600;
+    player.y = 2000;
+    player.angle = 0; // Eastbound toward safehouse
+    player.cash = 108500;
+    player.health = 95;
+    player.armor = 90;
+
+    // Heavy Titan Cargo transport van
+    const cargo = fleet.spawn('cargo', 3600, 2000, 0, false);
+    cargo.speed = 10.5;
+    cargo.nitro = 85;
+    player.enterCar(cargo);
+
+    camera.x = 3600;
+    camera.y = 2000;
+    camera.zoom = 0.88;
+
+    // Police barricade & cruisers ahead
+    const copAhead = fleet.spawn('interceptor', 3880, 1960, Math.PI - 0.2, true);
+    copAhead.speed = 0;
+    copAhead.sirenOn = true;
+
+    // 4 Wanted Stars
+    police.setWantedLevel(4);
+
+    // Cash pickups flying
+    pedestrians.cashPickups.push(
+      { x: 3580, y: 2000, amount: 5000, timer: 0 },
+      { x: 3550, y: 2010, amount: 5000, timer: 0 }
+    );
+
+    // Particles
+    combat.spawnParticle('nitro', 3540, 2000, 6);
+    combat.spawnParticle('spark', 3820, 1970, 5);
+
+    missions.startMission(3); // The Grand Marina Heist
+    missions.setDialogue('Rico & Selena', 'You got the bearer bonds! CBPD has the bridge blocked, push through!', 10);
   }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
-  }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
 }
